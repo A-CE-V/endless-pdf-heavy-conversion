@@ -12,25 +12,30 @@ const app = express();
 const upload = multer({ storage: multer.memoryStorage() });
 app.use(express.json());
 
-// --------------------- MERGE PDFs ---------------------
-app.post("/pdf/merge", verifyInternalKey, upload.array("pdfs"), async (req, res) => {
+app.post(
+  "/pdf/merge",
+  verifyInternalKey,
+  upload.array("pdfs"),
+  async (req, res) => {
+
   try {
-    if (!req.files || req.files.length < 2) return res.status(400).json({ error: "Upload at least 2 PDFs" });
+    if (!req.files || req.files.length < 2)
+      return res.status(400).json({ error: "Upload at least 2 PDFs" });
 
-    const mergedPdf = await PDFDocument.create();
-    for (const file of req.files) {
-      const pdf = await PDFDocument.load(file.buffer);
-      const pages = await mergedPdf.copyPages(pdf, pdf.getPageIndices());
-      pages.forEach((page) => mergedPdf.addPage(page));
-    }
+      const mergedPdf = await PDFDocument.create();
+      for (const file of req.files) {
+        const pdf = await PDFDocument.load(file.buffer);
+        const pages = await mergedPdf.copyPages(pdf, pdf.getPageIndices());
+        pages.forEach((page) => mergedPdf.addPage(page));
+      }
       
-    await addEndlessForgeMetadata(mergedPdf);
-    const mergedBytes = await mergedPdf.save();
+      await addEndlessForgeMetadata(mergedPdf);
+      const mergedBytes = await mergedPdf.save();
 
-    res.type("application/pdf");
-    res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `attachment; filename="merged.pdf"`);
-    res.send(Buffer.from(mergedBytes));
+      res.type("application/pdf");
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="merged.pdf"`);
+      res.send(Buffer.from(mergedBytes));
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message });
@@ -38,21 +43,24 @@ app.post("/pdf/merge", verifyInternalKey, upload.array("pdfs"), async (req, res)
 });
 
 // --------------------- SPLIT PDF ---------------------
-app.post("/pdf/split", verifyInternalKey, upload.single("pdf"), async (req, res) => {
+app.post(
+  "/pdf/split",
+  verifyInternalKey,
+  upload.single("pdf"),
+  async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: "Upload a PDF" });
 
     const pdf = await PDFDocument.load(req.file.buffer);
     const totalPages = pdf.getPageCount();
 
-    let parts = parseInt(req.body.parts) || 0; 
-    let pagesPerSplit = parseInt(req.body.pagesPerSplit) || 0; 
+    let parts = parseInt(req.body.parts) || 0; // total number of parts
+    let pagesPerSplit = parseInt(req.body.pagesPerSplit) || 0; // pages per split
     if (!parts && !pagesPerSplit) pagesPerSplit = 1;
     if (parts > 0) pagesPerSplit = Math.ceil(totalPages / parts);
 
     const archive = archiver("zip", { zlib: { level: 9 } });
     const originalName = req.file.originalname.replace(/\.[^/.]+$/, "");
-    
     res.setHeader("Content-Type", "application/zip");
     res.setHeader("Content-Disposition", `attachment; filename="${originalName}-by-parts.zip"`);
     archive.pipe(res);
